@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Szigetszentmiklós – 40-es felirat</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; height: 100vh; display: flex; flex-direction: column; }
+
+    header {
+      padding: 10px 18px;
+      background: #12122a;
+      border-bottom: 2px solid #e63946;
+      display: flex; align-items: center; gap: 14px;
+    }
+    header h1 { font-size: 1.15rem; color: #e63946; }
+    header span { font-size: 0.82rem; color: #aaa; }
+
+    #map { flex: 1; }
+
+    /* ---- Popup stílus ---- */
+    .leaflet-popup-content-wrapper {
+      background: #1e1e3a;
+      color: #eee;
+      border: 1px solid #e63946;
+      border-radius: 8px;
+    }
+    .leaflet-popup-tip { background: #1e1e3a; }
+    .popup-title { font-weight: bold; color: #e63946; margin-bottom: 6px; font-size: 1rem; }
+    .popup-coords { font-size: 0.75rem; color: #aaa; margin-bottom: 8px; }
+    .popup-group { font-size: 0.78rem; color: #7ec8e3; margin-bottom: 8px; }
+
+    .photo-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .photo-list img {
+      width: 90px; height: 67px; object-fit: cover;
+      border-radius: 4px; border: 1px solid #444;
+      cursor: pointer;
+    }
+    .photo-list img:hover { border-color: #e63946; }
+
+    .upload-label {
+      display: inline-block; padding: 5px 10px;
+      background: #e63946; color: #fff; border-radius: 4px;
+      cursor: pointer; font-size: 0.8rem;
+    }
+    .upload-label:hover { background: #c1121f; }
+    .upload-input { display: none; }
+
+    /* ---- Lightbox ---- */
+    #lightbox {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.88); z-index: 9999;
+      align-items: center; justify-content: center;
+    }
+    #lightbox.open { display: flex; }
+    #lightbox img { max-width: 92vw; max-height: 88vh; border-radius: 6px; }
+    #lightbox-close {
+      position: absolute; top: 18px; right: 24px;
+      font-size: 2rem; color: #fff; cursor: pointer; line-height: 1;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Szigetszentmiklós – 40-es felirat az utcákon</h1>
+  <span>Kattints egy jelölőre a részletekért és fotók feltöltéséhez</span>
+</header>
+
+<div id="map"></div>
+
+<div id="lightbox">
+  <span id="lightbox-close" title="Bezárás">&times;</span>
+  <img id="lightbox-img" src="" alt="fotó" />
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ────────────────────────────────────────────────
+//  Adatok
+// ────────────────────────────────────────────────
+const markerData = [
+  // "4" alakzat
+  {
+    id: "katolikus_templom_korforgalom",
+    name: "Katolikus templom körforgalom",
+    group: "4 alakzat",
+    lat: 47.34575412670619, lon: 19.04091169468922,
+    color: "#e63946"
+  },
+  {
+    id: "gyari_uti_korforgalom",
+    name: "Gyári úti körforgalom",
+    group: "4 alakzat",
+    lat: 47.337975104395916, lon: 19.035786208780905,
+    color: "#e63946"
+  },
+  {
+    id: "gyar2_korforgalom",
+    name: "Gyár 2 körforgalom",
+    group: "4 alakzat",
+    lat: 47.33823188438878, lon: 19.041848857524084,
+    color: "#e63946"
+  },
+  {
+    id: "kekto_sarok",
+    name: "Kéktó-sarok",
+    group: "4 alakzat",
+    lat: 47.33644977218012, lon: 19.04273364657472,
+    color: "#e63946"
+  },
+  // "0" alakzat / illesztési pontok
+  {
+    id: "noske",
+    name: "Noske",
+    group: "0 alakzat / illesztési pont",
+    lat: 47.341211, lon: 19.044253,
+    color: "#7ec8e3"
+  },
+  {
+    id: "setany_bufe",
+    name: "Sétány büfé",
+    group: "0 alakzat / illesztési pont",
+    lat: 47.34005012463215, lon: 19.048464593299702,
+    color: "#7ec8e3"
+  },
+  {
+    id: "dunapart",
+    name: "Dunapart",
+    group: "0 alakzat / illesztési pont",
+    lat: 47.34325070552266, lon: 19.052555473911458,
+    color: "#7ec8e3"
+  },
+  {
+    id: "hev_allomas",
+    name: "HÉV állomás",
+    group: "0 alakzat / illesztési pont",
+    lat: 47.34437139832502, lon: 19.04981420414185,
+    color: "#7ec8e3"
+  }
+];
+
+// Fotók tárolása: { markerId: [{ name, dataUrl }] }
+const photoStore = JSON.parse(localStorage.getItem("szszm40_photos") || "{}");
+
+function savePhotos() {
+  localStorage.setItem("szszm40_photos", JSON.stringify(photoStore));
+}
+
+// ────────────────────────────────────────────────
+//  Térkép inicializálás
+// ────────────────────────────────────────────────
+const map = L.map("map", { zoomControl: true }).setView([47.3405, 19.0435], 14);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+}).addTo(map);
+
+// ────────────────────────────────────────────────
+//  Jelölők
+// ────────────────────────────────────────────────
+function makeIcon(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="36" viewBox="0 0 26 36">
+    <path d="M13 0C5.82 0 0 5.82 0 13c0 9.25 13 23 13 23s13-13.75 13-23C26 5.82 20.18 0 13 0z" fill="${color}" stroke="#fff" stroke-width="1.5"/>
+    <circle cx="13" cy="13" r="5" fill="#fff" opacity="0.85"/>
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: "",
+    iconSize: [26, 36],
+    iconAnchor: [13, 36],
+    popupAnchor: [0, -34]
+  });
+}
+
+function buildPopupContent(md) {
+  const photos = photoStore[md.id] || [];
+  const photoHtml = photos.length
+    ? `<div class="photo-list">${photos.map((p, i) =>
+        `<img src="${p.dataUrl}" alt="${p.name}" title="${p.name}"
+              onclick="openLightbox('${md.id}', ${i})" />`
+      ).join("")}</div>`
+    : `<div style="font-size:0.78rem;color:#888;margin-bottom:8px;">Még nincs feltöltött fotó.</div>`;
+
+  return `
+    <div class="popup-title">${md.name}</div>
+    <div class="popup-group">${md.group}</div>
+    <div class="popup-coords">
+      ${md.lat.toFixed(6)}, ${md.lon.toFixed(6)}
+    </div>
+    ${photoHtml}
+    <label class="upload-label">
+      + Fotó hozzáadása
+      <input class="upload-input" type="file" accept="image/*" multiple
+             onchange="handleUpload(event, '${md.id}')" />
+    </label>
+  `;
+}
+
+const leafletMarkers = {};
+
+markerData.forEach(md => {
+  const marker = L.marker([md.lat, md.lon], { icon: makeIcon(md.color) })
+    .addTo(map)
+    .bindPopup(() => buildPopupContent(md), { maxWidth: 320 });
+
+  // Popup frissítése megnyitáskor (újratölti a fotókat)
+  marker.on("popupopen", () => {
+    marker.getPopup().setContent(buildPopupContent(md));
+  });
+
+  leafletMarkers[md.id] = marker;
+});
+
+// ────────────────────────────────────────────────
+//  Vonalak a „4" és „0" alakzat szemléltetéséhez
+// ────────────────────────────────────────────────
+// "4" – pontok összekötése a szám alakjának megfelelően
+const points4 = markerData.filter(m => m.group.includes("4")).map(m => [m.lat, m.lon]);
+L.polyline(points4, { color: "#e63946", weight: 2, dashArray: "6 4", opacity: 0.6 }).addTo(map);
+
+// "0" – az illesztési pontok körüli kör érzékeltetése
+const points0 = markerData.filter(m => m.group.includes("0")).map(m => [m.lat, m.lon]);
+L.polyline([...points0, points0[0]], { color: "#7ec8e3", weight: 2, dashArray: "6 4", opacity: 0.6 }).addTo(map);
+
+// ────────────────────────────────────────────────
+//  Fotó feltöltés kezelő
+// ────────────────────────────────────────────────
+function handleUpload(event, markerId) {
+  const files = Array.from(event.target.files);
+  if (!files.length) return;
+  if (!photoStore[markerId]) photoStore[markerId] = [];
+
+  let loaded = 0;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      photoStore[markerId].push({ name: file.name, dataUrl: e.target.result });
+      loaded++;
+      if (loaded === files.length) {
+        savePhotos();
+        const marker = leafletMarkers[markerId];
+        if (marker) {
+          const md = markerData.find(m => m.id === markerId);
+          marker.getPopup().setContent(buildPopupContent(md));
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ────────────────────────────────────────────────
+//  Lightbox
+// ────────────────────────────────────────────────
+function openLightbox(markerId, index) {
+  const photos = photoStore[markerId] || [];
+  if (!photos[index]) return;
+  document.getElementById("lightbox-img").src = photos[index].dataUrl;
+  document.getElementById("lightbox").classList.add("open");
+}
+
+document.getElementById("lightbox-close").addEventListener("click", () => {
+  document.getElementById("lightbox").classList.remove("open");
+});
+document.getElementById("lightbox").addEventListener("click", e => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove("open");
+});
+</script>
+</body>
+</html>
