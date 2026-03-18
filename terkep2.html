@@ -122,6 +122,7 @@ const markerData = [
     lat: 47.34575412670619, lon: 19.04091169468922,
     color: "#e63946",
     images: [
+      "https://nagyvofely.hu/img/tp/8/800o.jpg"
       // "kepek/katolikus_1.jpg",
       // "kepek/katolikus_2.jpg",
     ]
@@ -214,10 +215,10 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 //  Vonalak
 // ────────────────────────────────────────────────
 const pts4 = markerData.filter(m => m.group.includes("4")).map(m => [m.lat, m.lon]);
-L.polyline(pts4, { color: "#e63946", weight: 2.5, dashArray: "7 5", opacity: 0.65 }).addTo(map);
+L.polyline(pts4, { color: "#e63946", weight: 5.5, dashArray: "7 5", opacity: 1 }).addTo(map);
 
 const pts0 = markerData.filter(m => m.group.includes("0")).map(m => [m.lat, m.lon]);
-L.polyline([...pts0, pts0[0]], { color: "#7ec8e3", weight: 2.5, dashArray: "7 5", opacity: 0.65 }).addTo(map);
+L.polyline([...pts0, pts0[0]], { color: "#e63946", weight: 5.5, dashArray: "7 5", opacity:1 }).addTo(map);
 
 // ────────────────────────────────────────────────
 //  Ikonok
