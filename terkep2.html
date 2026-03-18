@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Szigetszentmiklós – 40-es felirat</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #1a1a2e; color: #eee; height: 100vh; display: flex; flex-direction: column; }
+
+    header {
+      padding: 10px 18px;
+      background: #12122a;
+      border-bottom: 2px solid #e63946;
+      display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    }
+    header h1 { font-size: 1.1rem; color: #e63946; }
+
+    /* Tour progress bar */
+    #tour-bar {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.78rem; color: #aaa; flex-shrink: 0;
+    }
+    #tour-label { color: #7ec8e3; font-weight: bold; min-width: 180px; text-align: right; }
+    #tour-progress {
+      width: 120px; height: 6px;
+      background: #2a2a4a; border-radius: 3px; overflow: hidden;
+    }
+    #tour-fill {
+      height: 100%; width: 0%; background: #e63946;
+      transition: none;
+    }
+
+    #map { flex: 1; }
+
+    /* Popup stílus */
+    .leaflet-popup-content-wrapper {
+      background: #1e1e3a; color: #eee;
+      border: 1px solid #e63946; border-radius: 8px;
+    }
+    .leaflet-popup-tip { background: #1e1e3a; }
+    .popup-title { font-weight: bold; color: #e63946; margin-bottom: 4px; font-size: 1rem; }
+    .popup-coords { font-size: 0.72rem; color: #888; margin-bottom: 6px; }
+    .popup-group { font-size: 0.76rem; color: #7ec8e3; margin-bottom: 8px; }
+
+    /* Képgaléria a popupban */
+    .gallery-wrap { position: relative; width: 280px; }
+    .gallery-img-box {
+      width: 280px; height: 200px;
+      background: #111128; border-radius: 5px; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .gallery-img-box img {
+      width: 100%; height: 100%; object-fit: cover;
+      cursor: pointer; border-radius: 5px;
+    }
+    .gallery-empty {
+      font-size: 0.8rem; color: #555; text-align: center; padding: 20px;
+    }
+    .gallery-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 6px;
+    }
+    .gallery-btn {
+      background: #2a2a4a; border: 1px solid #444; color: #eee;
+      padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 0.82rem;
+    }
+    .gallery-btn:hover { background: #e63946; border-color: #e63946; }
+    .gallery-counter { font-size: 0.75rem; color: #888; }
+
+    /* Lightbox */
+    #lightbox {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.9); z-index: 9999;
+      align-items: center; justify-content: center;
+    }
+    #lightbox.open { display: flex; }
+    #lightbox img { max-width: 94vw; max-height: 90vh; border-radius: 6px; }
+    #lightbox-close {
+      position: absolute; top: 16px; right: 22px;
+      font-size: 2.2rem; color: #fff; cursor: pointer; line-height: 1;
+    }
+
+    /* Kiemelt marker pulse */
+    @keyframes pulse-ring {
+      0%   { transform: scale(1);   opacity: 0.9; }
+      50%  { transform: scale(1.5); opacity: 0.4; }
+      100% { transform: scale(1);   opacity: 0.9; }
+    }
+    .marker-pulse { animation: pulse-ring 1s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Szigetszentmiklós – 40-es felirat az utcákon</h1>
+  <div id="tour-bar">
+    <span id="tour-label">–</span>
+    <div id="tour-progress"><div id="tour-fill"></div></div>
+  </div>
+</header>
+
+<div id="map"></div>
+
+<div id="lightbox">
+  <span id="lightbox-close" title="Bezárás">&times;</span>
+  <img id="lightbox-img" src="" alt="fotó" />
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ────────────────────────────────────────────────
+//  Adatok – képek: images tömbben add meg a fájlútvonalakat / URL-eket
+// ────────────────────────────────────────────────
+const markerData = [
+  // ── "4" alakzat ──────────────────────────────
+  {
+    id: "katolikus_templom_korforgalom",
+    name: "Katolikus templom körforgalom",
+    group: "4 alakzat",
+    lat: 47.34575412670619, lon: 19.04091169468922,
+    color: "#e63946",
+    images: [
+      // "kepek/katolikus_1.jpg",
+      // "kepek/katolikus_2.jpg",
+    ]
+  },
+  {
+    id: "gyari_uti_korforgalom",
+    name: "Gyári úti körforgalom",
+    group: "4 alakzat",
+    lat: 47.337975104395916, lon: 19.035786208780905,
+    color: "#e63946",
+    images: [
+      // "kepek/gyari_1.jpg",
+    ]
+  },
+  {
+    id: "gyar2_korforgalom",
+    name: "Gyár 2 körforgalom",
+    group: "4 alakzat",
+    lat: 47.33823188438878, lon: 19.041848857524084,
+    color: "#e63946",
+    images: [
+      // "kepek/gyar2_1.jpg",
+    ]
+  },
+  {
+    id: "kekto_sarok",
+    name: "Kéktó-sarok",
+    group: "4 alakzat",
+    lat: 47.33644977218012, lon: 19.04273364657472,
+    color: "#e63946",
+    images: [
+      // "kepek/kekto_1.jpg",
+    ]
+  },
+
+  // ── "0" alakzat ──────────────────────────────
+  {
+    id: "sargahaz_sarok",
+    name: "Sárgaház sarok",
+    group: "0 alakzat",
+    lat: 47.34464826784159, lon: 19.042064737476498,
+    color: "#7ec8e3",
+    images: [
+      // "kepek/sargahaz_1.jpg",
+    ]
+  },
+  {
+    id: "setany_bufe",
+    name: "Sétány büfé",
+    group: "0 alakzat",
+    lat: 47.34005012463215, lon: 19.048464593299702,
+    color: "#7ec8e3",
+    images: [
+      // "kepek/setany_1.jpg",
+    ]
+  },
+  {
+    id: "dunapart",
+    name: "Dunapart",
+    group: "0 alakzat",
+    lat: 47.34325070552266, lon: 19.052555473911458,
+    color: "#7ec8e3",
+    images: [
+      // "kepek/dunapart_1.jpg",
+    ]
+  },
+  {
+    id: "adam_jeno_emlekház",
+    name: "Ádám Jenő emlékház",
+    group: "0 alakzat",
+    lat: 47.34654382509927, lon: 19.047297571138635,
+    color: "#7ec8e3",
+    images: [
+      // "kepek/adam_jeno_1.jpg",
+    ]
+  }
+];
+
+// ────────────────────────────────────────────────
+//  Térkép
+// ────────────────────────────────────────────────
+const map = L.map("map", { zoomControl: true }).setView([47.3415, 19.0445], 14);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+}).addTo(map);
+
+// ────────────────────────────────────────────────
+//  Vonalak
+// ────────────────────────────────────────────────
+const pts4 = markerData.filter(m => m.group.includes("4")).map(m => [m.lat, m.lon]);
+L.polyline(pts4, { color: "#e63946", weight: 2.5, dashArray: "7 5", opacity: 0.65 }).addTo(map);
+
+const pts0 = markerData.filter(m => m.group.includes("0")).map(m => [m.lat, m.lon]);
+L.polyline([...pts0, pts0[0]], { color: "#7ec8e3", weight: 2.5, dashArray: "7 5", opacity: 0.65 }).addTo(map);
+
+// ────────────────────────────────────────────────
+//  Ikonok
+// ────────────────────────────────────────────────
+function makeIcon(color, highlighted) {
+  const size   = highlighted ? 34 : 26;
+  const height = highlighted ? 46 : 36;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${height}" viewBox="0 0 26 36">
+    <path d="M13 0C5.82 0 0 5.82 0 13c0 9.25 13 23 13 23s13-13.75 13-23C26 5.82 20.18 0 13 0z"
+          fill="${color}" stroke="#fff" stroke-width="${highlighted ? 2.5 : 1.5}"/>
+    <circle cx="13" cy="13" r="${highlighted ? 6 : 5}" fill="#fff" opacity="0.9"/>
+  </svg>`;
+  return L.divIcon({
+    html: highlighted
+      ? `<div class="marker-pulse">${svg}</div>`
+      : svg,
+    className: "",
+    iconSize: [size, height],
+    iconAnchor: [size / 2, height],
+    popupAnchor: [0, -(height - 2)]
+  });
+}
+
+// ────────────────────────────────────────────────
+//  Popup tartalom – képgaléria
+// ────────────────────────────────────────────────
+// Galéria állapota markerId → aktuális index
+const galleryState = {};
+
+function buildPopupContent(md) {
+  const imgs = md.images || [];
+  if (!(md.id in galleryState)) galleryState[md.id] = 0;
+  const idx = galleryState[md.id];
+
+  let galleryHtml;
+  if (imgs.length === 0) {
+    galleryHtml = `<div class="gallery-img-box"><div class="gallery-empty">Még nincs kép hozzárendelve.<br><small>Add hozzá a <code>images</code> tömbhöz.</small></div></div>`;
+  } else {
+    galleryHtml = `
+      <div class="gallery-wrap">
+        <div class="gallery-img-box">
+          <img src="${imgs[idx]}" alt="fotó ${idx + 1}"
+               onclick="openLightbox('${md.id}')" title="Nagyítás" />
+        </div>
+        ${imgs.length > 1 ? `
+        <div class="gallery-nav">
+          <button class="gallery-btn" onclick="galleryStep('${md.id}', -1)">&#8592;</button>
+          <span class="gallery-counter">${idx + 1} / ${imgs.length}</span>
+          <button class="gallery-btn" onclick="galleryStep('${md.id}', 1)">&#8594;</button>
+        </div>` : ""}
+      </div>`;
+  }
+
+  return `
+    <div class="popup-title">${md.name}</div>
+    <div class="popup-group">${md.group}</div>
+    <div class="popup-coords">${md.lat.toFixed(6)}, ${md.lon.toFixed(6)}</div>
+    ${galleryHtml}
+  `;
+}
+
+// ────────────────────────────────────────────────
+//  Jelölők
+// ────────────────────────────────────────────────
+const leafletMarkers = {};
+
+markerData.forEach(md => {
+  const marker = L.marker([md.lat, md.lon], { icon: makeIcon(md.color, false) })
+    .addTo(map)
+    .bindPopup(() => buildPopupContent(md), { maxWidth: 320 });
+
+  marker.on("popupopen", () => {
+    marker.getPopup().setContent(buildPopupContent(md));
+  });
+
+  leafletMarkers[md.id] = marker;
+});
+
+// ────────────────────────────────────────────────
+//  Galéria léptetés
+// ────────────────────────────────────────────────
+function galleryStep(markerId, dir) {
+  const md = markerData.find(m => m.id === markerId);
+  if (!md || !md.images.length) return;
+  galleryState[markerId] = (galleryState[markerId] + dir + md.images.length) % md.images.length;
+  const marker = leafletMarkers[markerId];
+  if (marker && marker.isPopupOpen()) {
+    marker.getPopup().setContent(buildPopupContent(md));
+  }
+}
+
+// ────────────────────────────────────────────────
+//  Lightbox
+// ────────────────────────────────────────────────
+function openLightbox(markerId) {
+  const md = markerData.find(m => m.id === markerId);
+  if (!md || !md.images.length) return;
+  const idx = galleryState[markerId] || 0;
+  document.getElementById("lightbox-img").src = md.images[idx];
+  document.getElementById("lightbox").classList.add("open");
+}
+
+document.getElementById("lightbox-close").addEventListener("click", () => {
+  document.getElementById("lightbox").classList.remove("open");
+});
+document.getElementById("lightbox").addEventListener("click", e => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove("open");
+});
+
+// ────────────────────────────────────────────────
+//  Auto-tour – 10 másodpercenként körbejárja a pontokat
+// ────────────────────────────────────────────────
+const TOUR_INTERVAL = 10000; // ms
+let tourIndex = 0;
+let prevMarkerId = null;
+let fillInterval = null;
+
+function tourStep() {
+  const md = markerData[tourIndex];
+
+  // Előző jelölő visszaállítása
+  if (prevMarkerId !== null) {
+    const prevMd = markerData.find(m => m.id === prevMarkerId);
+    if (prevMd) {
+      leafletMarkers[prevMarkerId].setIcon(makeIcon(prevMd.color, false));
+      leafletMarkers[prevMarkerId].closePopup();
+    }
+  }
+
+  // Aktuális kiemelés
+  leafletMarkers[md.id].setIcon(makeIcon(md.color, true));
+  map.flyTo([md.lat, md.lon], 16, { duration: 1.2 });
+
+  setTimeout(() => {
+    if (leafletMarkers[md.id]) leafletMarkers[md.id].openPopup();
+  }, 1300);
+
+  // Progress bar reset + animálás
+  const fill = document.getElementById("tour-fill");
+  fill.style.transition = "none";
+  fill.style.width = "0%";
+  clearInterval(fillInterval);
+  setTimeout(() => {
+    fill.style.transition = `width ${TOUR_INTERVAL}ms linear`;
+    fill.style.width = "100%";
+  }, 50);
+
+  // Fejléc felirat
+  document.getElementById("tour-label").textContent =
+    `${tourIndex + 1}/${markerData.length} – ${md.name}`;
+
+  prevMarkerId = md.id;
+  tourIndex = (tourIndex + 1) % markerData.length;
+}
+
+// Első lépés induláskor, majd 10 mp-enként
+tourStep();
+setInterval(tourStep, TOUR_INTERVAL);
+</script>
+</body>
+</html>
